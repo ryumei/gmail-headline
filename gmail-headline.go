@@ -187,7 +187,7 @@ func main() {
 	for _, msg := range mes.Messages {
 		fmt.Printf("%s,%d\n", msg.Id, len(msg.Raw))
 
-		get(client, "me", msg.Id)
+		get(client, user, msg.Id)
 
 		ids = append(ids, msg.Id)
 	}
