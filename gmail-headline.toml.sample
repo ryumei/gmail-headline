@@ -1,0 +1,9 @@
+[Gmail]
+TokenFile = "token.json"
+CredentialsFile = "credentials.json"
+PreserveLabels = ["INBOX"]
+
+[Headline]
+Limit = 10
+OutputFile = "gmail-headline.jsonl"
+
