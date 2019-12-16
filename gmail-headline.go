@@ -97,32 +97,8 @@ func saveToken(path string, token *oauth2.Token) {
 	json.NewEncoder(f).Encode(token)
 }
 
-func get(client *http.Client, userAddres, id string) {
-	url := fmt.Sprintf(
-		"https://www.googleapis.com/gmail/v1/users/%s/messages/%s?format=full",
-		userAddres, id)
-	// url := fmt.Sprintf(
-	//     "https://www.googleapis.com/gmail/v1/users/%s/messages/%s?format=raw",
-	//     userAddres, id)
-
-	res, err := client.Get(url)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Get Error: %v\n", err)
-		os.Exit(1)
-	}
-
-	data, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ReadAll Error: %v\n", err)
-		os.Exit(1)
-	}
-
-	msg := Message{}
-	err = json.Unmarshal(data, &msg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unmarshal Error: %v\n", err)
-		os.Exit(1)
-	}
+func get(srv *gmail.Service, userAddres string, id string) {
+	msg, _ := srv.Users.Messages.Get(userAddres, id).Do()
 
 	if msg.Payload.Body.Data == "" {
 		fmt.Println("empty")
@@ -187,7 +163,7 @@ func main() {
 	for _, msg := range mes.Messages {
 		fmt.Printf("%s,%d\n", msg.Id, len(msg.Raw))
 
-		get(client, user, msg.Id)
+		get(srv, user, msg.Id)
 
 		ids = append(ids, msg.Id)
 	}
