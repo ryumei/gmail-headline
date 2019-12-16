@@ -73,19 +73,19 @@ func saveToken(path string, token *oauth2.Token) {
 	json.NewEncoder(f).Encode(token)
 }
 
-func exportData(path string, data string) {
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
-	if err != nil {
-		log.Fatalf("Failed to open output file: &v", err)
-	}
-	defer file.Close()
+// func exportData(path string, data string) {
+// 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
+// 	if err != nil {
+// 		log.Fatalf("Failed to open output file: %v", err)
+// 	}
+// 	defer file.Close()
 
-	fmt.Fprintln(file, data)
-}
+// 	fmt.Fprintln(file, data)
+// }
 
-// Find takes a slice and looks for an element in it. If found it will
+// Find takes a slice and looks for keys in it. If found it will
 // return it's key, otherwise it will return -1 and a bool of false.
-func Find(slice []string, keys []string) (int, bool) {
+func find(keys []string, slice []string) (int, bool) {
 	for i, item := range slice {
 		for _, val := range keys {
 			if item == val {
@@ -103,10 +103,11 @@ type Config struct {
 type GmailConfig struct {
 	TokenFile       string
 	CredentialsFile string
+	User            string
 	SkipLabels      []string
 }
 type HeadlineConfig struct {
-	Limit      uint
+	Limit      int
 	OutputFile string
 }
 
@@ -134,20 +135,26 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to retrieve Gmail client: %v", err)
 	}
+	execute(srv, &conf.Gmail, &conf.Headline)
+}
 
-	user := "me"
-
-	mes, err := srv.Users.Messages.List(user).Q("is:unread").Do()
+func execute(srv *gmail.Service, gmail *GmailConfig, headline *HeadlineConfig) {
+	mes, err := srv.Users.Messages.List(gmail.User).Q("is:unread").Do()
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
 
-	var count uint
+	file, err := os.OpenFile(headline.OutputFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
+	if err != nil {
+		log.Fatalf("Failed to open output file: %v", err)
+	}
+	defer file.Close()
+
 	ids := []string{}
 	for _, msgID := range mes.Messages {
-		msg, _ := srv.Users.Messages.Get(user, msgID.Id).Format("metadata").Do()
+		msg, _ := srv.Users.Messages.Get(gmail.User, msgID.Id).Format("metadata").Do()
 
-		_, ok := Find(msg.LabelIds, conf.Gmail.SkipLabels)
+		_, ok := find(gmail.SkipLabels, msg.LabelIds)
 		if ok {
 			continue
 		}
@@ -164,17 +171,19 @@ func main() {
 				}
 			}
 		}
-		excerpted := ExcerptMessage{Metadata: msg, Header: header}
+		msg.Payload.Headers = nil
 
 		// Export a mail data
+		excerpted := ExcerptMessage{Metadata: msg, Header: header}
 		data, _ := json.Marshal(excerpted)
-		exportData(conf.Headline.OutputFile, string(data))
+		fmt.Fprintln(file, string(data))
 
+		// memo to mark as read
 		ids = append(ids, msgID.Id)
-
-		count++
-		if count > conf.Headline.Limit {
+		if len(ids) > headline.Limit {
 			break
 		}
 	}
+
+	//TODO Mark as Read
 }

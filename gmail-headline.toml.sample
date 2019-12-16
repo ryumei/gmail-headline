@@ -1,6 +1,7 @@
 [Gmail]
 TokenFile = "token.json"
 CredentialsFile = "credentials.json"
+User = "me"
 SkipLabels = ["INBOX"]
 
 [Headline]
