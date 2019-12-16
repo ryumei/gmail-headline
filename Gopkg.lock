@@ -8,6 +8,12 @@
   version = "v0.49.0"
 
 [[projects]]
+  name = "github.com/BurntSushi/toml"
+  packages = ["."]
+  revision = "3012a1dbe2e4bd1391d42b32f0577cb7bbc7f005"
+  version = "v0.3.1"
+
+[[projects]]
   branch = "master"
   name = "github.com/golang/groupcache"
   packages = ["lru"]
@@ -194,6 +200,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "30f40cfe22a80274127485a77a507e7b13f5d459ccb6f6eee123553609333e75"
+  inputs-digest = "84c3a7d0574c81a218a9398f6550d287669ba8464c1feb7cd961abb0e39cb86c"
   solver-name = "gps-cdcl"
   solver-version = 1

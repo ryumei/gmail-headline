@@ -12,6 +12,8 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/gmail/v1"
+
+	"github.com/BurntSushi/toml"
 )
 
 type Response struct {
@@ -42,11 +44,11 @@ type Attachments struct {
 }
 
 // Retrieve a token, saves the token, then returns the generated client.
-func getClient(config *oauth2.Config) *http.Client {
+func getClient(config *oauth2.Config, tokFile string) *http.Client {
 	// The file token.json stores the user's access and refresh tokens, and is
 	// created automatically when the authorization flow completes for the first
 	// time.
-	tokFile := "token.json"
+	//tokFile := "token.json"
 	tok, err := tokenFromFile(tokFile)
 	if err != nil {
 		tok = getTokenFromWeb(config)
@@ -96,8 +98,27 @@ func saveToken(path string, token *oauth2.Token) {
 	json.NewEncoder(f).Encode(token)
 }
 
+type Config struct {
+	Gmail    GmailConfig
+	Headline HeadlineConfig
+}
+type GmailConfig struct {
+	TokenFile       string
+	CredentialsFile string
+}
+type HeadlineConfig struct {
+	Limit      uint
+	OutputFile string
+}
+
 func main() {
-	b, err := ioutil.ReadFile("credentials.json")
+	var conf Config
+	_, err := toml.DecodeFile("gmail-headline.toml", &conf)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	b, err := ioutil.ReadFile(conf.Gmail.CredentialsFile)
 	if err != nil {
 		log.Fatalf("Unable to read client secret file: %v", err)
 	}
@@ -107,7 +128,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
-	client := getClient(config)
+	client := getClient(config, conf.Gmail.TokenFile)
 
 	srv, err := gmail.New(client)
 	if err != nil {
@@ -123,10 +144,6 @@ func main() {
 		fmt.Println("No labels found.")
 		return
 	}
-	// fmt.Println("Labels:")
-	// for _, l := range r.Labels {
-	// 	fmt.Printf("- %s\n", l.Name)
-	// }
 
 	mes, err := srv.Users.Messages.List(user).Q("is:unread").Do()
 	if err != nil {
