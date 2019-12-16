@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
@@ -16,39 +17,13 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-type Response struct {
-	Messages           []Message `json:"messages"`
-	NextPageToken      string    `json:"nextPageToken"`
-	ResultSizeEstimate uint      `json:"resultSizeEstimate"`
-}
-
-type Message struct {
-	Id           string   `json:"id"`
-	ThreadId     string   `json:"threadId"`
-	LabelIds     []string `json:"labelIds"`
-	Snippet      string   `json:"snippet"`
-	HistoryId    uint64   `json:"hostoryId"`
-	SizeEstimate int      `json:"sizeEstimate"`
-	Raw          string   `json:"raw"`
-	Payload      Payload  `json:"payload"`
-}
-
-type Payload struct {
-	Body Attachments `json:"body"`
-}
-
-type Attachments struct {
-	AttachmentId string `json:attachmentId`
-	Data         string `json:"data"`
-	Size         int    `json:"size"`
+type ExcerptMessage struct {
+	Metadata *gmail.Message    `json:metadata`
+	Header   map[string]string `json:header`
 }
 
 // Retrieve a token, saves the token, then returns the generated client.
 func getClient(config *oauth2.Config, tokFile string) *http.Client {
-	// The file token.json stores the user's access and refresh tokens, and is
-	// created automatically when the authorization flow completes for the first
-	// time.
-	//tokFile := "token.json"
 	tok, err := tokenFromFile(tokFile)
 	if err != nil {
 		tok = getTokenFromWeb(config)
@@ -98,6 +73,16 @@ func saveToken(path string, token *oauth2.Token) {
 	json.NewEncoder(f).Encode(token)
 }
 
+func exportData(path string, data string) {
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
+	if err != nil {
+		log.Fatalf("Failed to open output file: &v", err)
+	}
+	defer file.Close()
+
+	fmt.Fprintln(file, data)
+}
+
 type Config struct {
 	Gmail    GmailConfig
 	Headline HeadlineConfig
@@ -115,7 +100,7 @@ func main() {
 	var conf Config
 	_, err := toml.DecodeFile("gmail-headline.toml", &conf)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Unable to read config file: %v", err)
 	}
 
 	b, err := ioutil.ReadFile(conf.Gmail.CredentialsFile)
@@ -124,46 +109,50 @@ func main() {
 	}
 
 	// If modifying these scopes, delete your previously saved token.json.
-	config, err := google.ConfigFromJSON(b, gmail.GmailModifyScope)
+	gConfig, err := google.ConfigFromJSON(b, gmail.GmailModifyScope)
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
-	client := getClient(config, conf.Gmail.TokenFile)
+	client := getClient(gConfig, conf.Gmail.TokenFile)
 
+	// Retrieve messages from Gmail
 	srv, err := gmail.New(client)
 	if err != nil {
 		log.Fatalf("Unable to retrieve Gmail client: %v", err)
 	}
 
 	user := "me"
-	r, err := srv.Users.Labels.List(user).Do()
-	if err != nil {
-		log.Fatalf("Unable to retrieve labels: %v", err)
-	}
-	if len(r.Labels) == 0 {
-		fmt.Println("No labels found.")
-		return
-	}
 
 	mes, err := srv.Users.Messages.List(user).Q("is:unread").Do()
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
 
-	count := 0
+	var count uint
 	ids := []string{}
-	for _, msg := range mes.Messages {
-		//msg, _ := srv.Users.Messages.Get(user, msg.Id).Format("minimal").Do()
-		msg, _ := srv.Users.Messages.Get(user, msg.Id).Format("metadata").Do()
-		header, _ := msg.MarshalJSON()
-		fmt.Println(string(header))
+	for _, msgID := range mes.Messages {
+		msg, _ := srv.Users.Messages.Get(user, msgID.Id).Format("metadata").Do()
+		header := map[string]string{}
+		for _, h := range msg.Payload.Headers {
+			header[h.Name] = h.Value
+			if h.Name == "Received" {
+				if _, ok := header["LastReceived"]; !ok {
+					header["LastReceived"] = strings.TrimSpace(strings.SplitAfter(h.Value, ";")[1])
+				}
+				header["Received"] += "\t" + h.Value
+			}
+		}
+		excerpted := ExcerptMessage{Metadata: msg, Header: header}
 
-		ids = append(ids, msg.Id)
+		// Export a mail data
+		data, _ := json.Marshal(excerpted)
+		exportData(conf.Headline.OutputFile, string(data))
 
-		count += 1
-		if count > 10 {
+		ids = append(ids, msgID.Id)
+
+		count++
+		if count > conf.Headline.Limit {
 			break
 		}
 	}
-
 }
