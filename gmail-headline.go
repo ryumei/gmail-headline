@@ -138,8 +138,10 @@ func main() {
 			if h.Name == "Received" {
 				if _, ok := header["LastReceived"]; !ok {
 					header["LastReceived"] = strings.TrimSpace(strings.SplitAfter(h.Value, ";")[1])
+					header["Received"] = h.Value
+				} else {
+					header["Received"] += "\t" + h.Value
 				}
-				header["Received"] += "\t" + h.Value
 			}
 		}
 		excerpted := ExcerptMessage{Metadata: msg, Header: header}
