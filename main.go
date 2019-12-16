@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
@@ -18,8 +17,8 @@ import (
 )
 
 type ExcerptMessage struct {
-	Metadata *gmail.Message    `json:metadata`
-	Header   map[string]string `json:header`
+	Metadata *gmail.Message      `json:metadata`
+	Header   map[string][]string `json:header`
 }
 
 // Retrieve a token, saves the token, then returns the generated client.
@@ -72,16 +71,6 @@ func saveToken(path string, token *oauth2.Token) {
 	defer f.Close()
 	json.NewEncoder(f).Encode(token)
 }
-
-// func exportData(path string, data string) {
-// 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
-// 	if err != nil {
-// 		log.Fatalf("Failed to open output file: %v", err)
-// 	}
-// 	defer file.Close()
-
-// 	fmt.Fprintln(file, data)
-// }
 
 // Find takes a slice and looks for keys in it. If found it will
 // return it's key, otherwise it will return -1 and a bool of false.
@@ -138,8 +127,8 @@ func main() {
 	execute(srv, &conf.Gmail, &conf.Headline)
 }
 
-func execute(srv *gmail.Service, gmail *GmailConfig, headline *HeadlineConfig) {
-	mes, err := srv.Users.Messages.List(gmail.User).Q("is:unread").Do()
+func execute(srv *gmail.Service, gmailConf *GmailConfig, headline *HeadlineConfig) {
+	mes, err := srv.Users.Messages.List(gmailConf.User).Q("is:unread").Do()
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
@@ -152,24 +141,17 @@ func execute(srv *gmail.Service, gmail *GmailConfig, headline *HeadlineConfig) {
 
 	ids := []string{}
 	for _, msgID := range mes.Messages {
-		msg, _ := srv.Users.Messages.Get(gmail.User, msgID.Id).Format("metadata").Do()
+		msg, _ := srv.Users.Messages.Get(gmailConf.User, msgID.Id).Format("metadata").Do()
 
-		_, ok := find(gmail.SkipLabels, msg.LabelIds)
+		_, ok := find(gmailConf.SkipLabels, msg.LabelIds)
 		if ok {
 			continue
 		}
 
-		header := map[string]string{}
+		// Extract Payload.Headers
+		header := map[string][]string{}
 		for _, h := range msg.Payload.Headers {
-			header[h.Name] = h.Value
-			if h.Name == "Received" {
-				if _, ok := header["LastReceived"]; !ok {
-					header["LastReceived"] = strings.TrimSpace(strings.SplitAfter(h.Value, ";")[1])
-					header["Received"] = h.Value
-				} else {
-					header["Received"] += "\t" + h.Value
-				}
-			}
+			header[h.Name] = append(header[h.Name], h.Value)
 		}
 		msg.Payload.Headers = nil
 
@@ -185,5 +167,13 @@ func execute(srv *gmail.Service, gmail *GmailConfig, headline *HeadlineConfig) {
 		}
 	}
 
-	//TODO Mark as Read
+	// Mark as Read
+	batchReq := gmail.BatchModifyMessagesRequest{
+		RemoveLabelIds: []string{"UNREAD"},
+		Ids:            ids,
+	}
+	err = srv.Users.Messages.BatchModify(gmailConf.User, &batchReq).Do()
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
 }
