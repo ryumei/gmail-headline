@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -97,31 +96,6 @@ func saveToken(path string, token *oauth2.Token) {
 	json.NewEncoder(f).Encode(token)
 }
 
-func get(srv *gmail.Service, userAddres string, id string) {
-	msg, _ := srv.Users.Messages.Get(userAddres, id).Do()
-
-	if msg.Payload.Body.Data == "" {
-		fmt.Println("empty")
-	} else {
-		b64, err := base64.URLEncoding.DecodeString(msg.Payload.Body.Data)
-		if err != nil {
-			fmt.Printf("Error0: %v\n", err)
-		}
-
-		fmt.Println(string(b64))
-	}
-	// if msg.Raw == "" {
-	//     fmt.Println("empty")
-	// } else {
-	//     b64, err := base64.URLEncoding.DecodeString(msg.Raw)
-	//     if err != nil {
-	//         fmt.Printf("Error0: %v\n", err)
-	//     }
-
-	//     fmt.Println(string(b64))
-	// }
-}
-
 func main() {
 	b, err := ioutil.ReadFile("credentials.json")
 	if err != nil {
@@ -149,23 +123,30 @@ func main() {
 		fmt.Println("No labels found.")
 		return
 	}
-	fmt.Println("Labels:")
-	for _, l := range r.Labels {
-		fmt.Printf("- %s\n", l.Name)
-	}
+	// fmt.Println("Labels:")
+	// for _, l := range r.Labels {
+	// 	fmt.Printf("- %s\n", l.Name)
+	// }
 
 	mes, err := srv.Users.Messages.List(user).Q("is:unread").Do()
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
 
+	count := 0
 	ids := []string{}
 	for _, msg := range mes.Messages {
-		fmt.Printf("%s,%d\n", msg.Id, len(msg.Raw))
-
-		get(srv, user, msg.Id)
+		//msg, _ := srv.Users.Messages.Get(user, msg.Id).Format("minimal").Do()
+		msg, _ := srv.Users.Messages.Get(user, msg.Id).Format("metadata").Do()
+		header, _ := msg.MarshalJSON()
+		fmt.Println(string(header))
 
 		ids = append(ids, msg.Id)
+
+		count += 1
+		if count > 10 {
+			break
+		}
 	}
 
 }
