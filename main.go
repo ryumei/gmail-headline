@@ -83,6 +83,19 @@ func exportData(path string, data string) {
 	fmt.Fprintln(file, data)
 }
 
+// Find takes a slice and looks for an element in it. If found it will
+// return it's key, otherwise it will return -1 and a bool of false.
+func Find(slice []string, keys []string) (int, bool) {
+	for i, item := range slice {
+		for _, val := range keys {
+			if item == val {
+				return i, true
+			}
+		}
+	}
+	return -1, false
+}
+
 type Config struct {
 	Gmail    GmailConfig
 	Headline HeadlineConfig
@@ -90,6 +103,7 @@ type Config struct {
 type GmailConfig struct {
 	TokenFile       string
 	CredentialsFile string
+	SkipLabels      []string
 }
 type HeadlineConfig struct {
 	Limit      uint
@@ -132,6 +146,12 @@ func main() {
 	ids := []string{}
 	for _, msgID := range mes.Messages {
 		msg, _ := srv.Users.Messages.Get(user, msgID.Id).Format("metadata").Do()
+
+		_, ok := Find(msg.LabelIds, conf.Gmail.SkipLabels)
+		if ok {
+			continue
+		}
+
 		header := map[string]string{}
 		for _, h := range msg.Payload.Headers {
 			header[h.Name] = h.Value

@@ -1,7 +1,7 @@
 [Gmail]
 TokenFile = "token.json"
 CredentialsFile = "credentials.json"
-PreserveLabels = ["INBOX"]
+SkipLabels = ["INBOX"]
 
 [Headline]
 Limit = 10
