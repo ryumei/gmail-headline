@@ -2,9 +2,11 @@
 TokenFile = "token.json"
 CredentialsFile = "credentials.json"
 User = "me"
-SkipLabels = ["INBOX"]
+ReadConditions = [
+  "is:unread -label:INBOX"
+]
 RemoveConditions = [
-  "older_than:1m label:news -label:unread"
+  "-is:unread older_than:1m label:news"
 ]
 
 [Headline]
