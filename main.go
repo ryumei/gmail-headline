@@ -134,6 +134,20 @@ func main() {
 	execute(srv, &conf.Gmail, &conf.Headline)
 }
 
+func retrieveMessage(srv *gmail.Service, user string, msgID string) ExcerptMessage {
+	msg, _ := srv.Users.Messages.Get(user, msgID).Format("metadata").Do()
+
+	// Extract Payload.Headers
+	header := map[string][]string{}
+	for _, h := range msg.Payload.Headers {
+		header[h.Name] = append(header[h.Name], h.Value)
+	}
+	msg.Payload.Headers = nil
+
+	// Export a mail data
+	return ExcerptMessage{Metadata: msg, Header: header}
+}
+
 func execute(srv *gmail.Service, gmailConf *GmailConfig, headline *HeadlineConfig) {
 	file, err := os.OpenFile(headline.OutputFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
@@ -150,17 +164,8 @@ func execute(srv *gmail.Service, gmailConf *GmailConfig, headline *HeadlineConfi
 		}
 
 		for _, msgID := range mes.Messages {
-			msg, _ := srv.Users.Messages.Get(gmailConf.User, msgID.Id).Format("metadata").Do()
+			excerpted := retrieveMessage(srv, gmailConf.User, msgID.Id)
 
-			// Extract Payload.Headers
-			header := map[string][]string{}
-			for _, h := range msg.Payload.Headers {
-				header[h.Name] = append(header[h.Name], h.Value)
-			}
-			msg.Payload.Headers = nil
-
-			// Export a mail data
-			excerpted := ExcerptMessage{Metadata: msg, Header: header}
 			data, _ := json.Marshal(excerpted)
 			fmt.Fprintln(file, string(data))
 
