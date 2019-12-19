@@ -180,14 +180,15 @@ func execute(srv *gmail.Service, gmailConf *GmailConfig, headline *HeadlineConfi
 	}
 
 	// Mark as Read
-	// batchReq := gmail.BatchModifyMessagesRequest{
-	// 	RemoveLabelIds: []string{"UNREAD"},
-	// 	Ids:            readIDs,
-	// }
-	// err = srv.Users.Messages.BatchModify(gmailConf.User, &batchReq).Do()
-	// if err != nil {
-	// 	log.Fatalf("Error: %v", err)
-	// }
+	batchReq := gmail.BatchModifyMessagesRequest{
+		RemoveLabelIds: []string{"UNREAD"},
+		Ids:            readIDs,
+	}
+	err = srv.Users.Messages.BatchModify(gmailConf.User, &batchReq).Do()
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+    log.Printf("[INFO] Change %d mails to READ.", len(readIDs))
 
 	// TODO remove
 }
