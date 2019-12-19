@@ -16,6 +16,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+// ExcerptMessage is structure for each email
 type ExcerptMessage struct {
 	Metadata *gmail.Message      `json:metadata`
 	Header   map[string][]string `json:header`
@@ -85,16 +86,22 @@ func find(keys []string, slice []string) (int, bool) {
 	return -1, false
 }
 
+// Config is a set of configurations
 type Config struct {
 	Gmail    GmailConfig
 	Headline HeadlineConfig
 }
+
+// GmailConfig set Gmail API
 type GmailConfig struct {
-	TokenFile       string
-	CredentialsFile string
-	User            string
-	SkipLabels      []string
+	TokenFile          string
+	CredentialsFile    string
+	User               string
+	RetrieveConditions []string
+	DeleteConditions   []string
 }
+
+// HeadlineConfig set client behavior
 type HeadlineConfig struct {
 	Limit      int
 	OutputFile string
@@ -128,52 +135,54 @@ func main() {
 }
 
 func execute(srv *gmail.Service, gmailConf *GmailConfig, headline *HeadlineConfig) {
-	mes, err := srv.Users.Messages.List(gmailConf.User).Q("is:unread").Do()
-	if err != nil {
-		log.Fatalf("Error: %v", err)
-	}
-
 	file, err := os.OpenFile(headline.OutputFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
 		log.Fatalf("Failed to open output file: %v", err)
 	}
 	defer file.Close()
 
-	ids := []string{}
-	for _, msgID := range mes.Messages {
-		msg, _ := srv.Users.Messages.Get(gmailConf.User, msgID.Id).Format("metadata").Do()
-
-		_, ok := find(gmailConf.SkipLabels, msg.LabelIds)
-		if ok {
-			continue
+	readIDs := []string{}
+	for _, query := range gmailConf.RetrieveConditions {
+		log.Printf("[INFO] Retrieve q: %v ", query)
+		mes, err := srv.Users.Messages.List(gmailConf.User).Q(query).Do()
+		if err != nil {
+			log.Fatalf("Error: %v", err)
 		}
 
-		// Extract Payload.Headers
-		header := map[string][]string{}
-		for _, h := range msg.Payload.Headers {
-			header[h.Name] = append(header[h.Name], h.Value)
-		}
-		msg.Payload.Headers = nil
+		for _, msgID := range mes.Messages {
+			msg, _ := srv.Users.Messages.Get(gmailConf.User, msgID.Id).Format("metadata").Do()
 
-		// Export a mail data
-		excerpted := ExcerptMessage{Metadata: msg, Header: header}
-		data, _ := json.Marshal(excerpted)
-		fmt.Fprintln(file, string(data))
+			// Extract Payload.Headers
+			header := map[string][]string{}
+			for _, h := range msg.Payload.Headers {
+				header[h.Name] = append(header[h.Name], h.Value)
+			}
+			msg.Payload.Headers = nil
 
-		// memo to mark as read
-		ids = append(ids, msgID.Id)
-		if len(ids) > headline.Limit {
-			break
+			// Export a mail data
+			excerpted := ExcerptMessage{Metadata: msg, Header: header}
+			data, _ := json.Marshal(excerpted)
+			fmt.Fprintln(file, string(data))
+
+			// memo to mark as read
+			readIDs = append(readIDs, msgID.Id)
+			if len(readIDs) >= headline.Limit {
+				log.Println("[INFO] Exceeded retrieve limit per execution.")
+				break
+			}
 		}
+		log.Printf("[INFO] Retrieved %d mails.", len(readIDs))
 	}
 
 	// Mark as Read
-	batchReq := gmail.BatchModifyMessagesRequest{
-		RemoveLabelIds: []string{"UNREAD"},
-		Ids:            ids,
-	}
-	err = srv.Users.Messages.BatchModify(gmailConf.User, &batchReq).Do()
-	if err != nil {
-		log.Fatalf("Error: %v", err)
-	}
+	// batchReq := gmail.BatchModifyMessagesRequest{
+	// 	RemoveLabelIds: []string{"UNREAD"},
+	// 	Ids:            readIDs,
+	// }
+	// err = srv.Users.Messages.BatchModify(gmailConf.User, &batchReq).Do()
+	// if err != nil {
+	// 	log.Fatalf("Error: %v", err)
+	// }
+
+	// TODO remove
 }

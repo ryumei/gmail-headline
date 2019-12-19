@@ -2,10 +2,10 @@
 TokenFile = "token.json"
 CredentialsFile = "credentials.json"
 User = "me"
-ReadConditions = [
+RetrieveConditions = [
   "is:unread -label:INBOX"
 ]
-RemoveConditions = [
+DeleteConditions = [
   "-is:unread older_than:1m label:news"
 ]
 
