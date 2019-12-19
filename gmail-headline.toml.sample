@@ -3,6 +3,9 @@ TokenFile = "token.json"
 CredentialsFile = "credentials.json"
 User = "me"
 SkipLabels = ["INBOX"]
+RemoveConditions = [
+  "older_than:1m label:news -label:unread"
+]
 
 [Headline]
 Limit = 10
