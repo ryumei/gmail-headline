@@ -65,7 +65,7 @@ func tokenFromFile(file string) (*oauth2.Token, error) {
 // Saves a token to a file path.
 func saveToken(path string, token *oauth2.Token) {
 	fmt.Printf("Saving credential file to: %s\n", path)
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0640)
 	if err != nil {
 		log.Fatalf("Unable to cache oauth token: %v", err)
 	}
@@ -114,7 +114,7 @@ func httpClient(credentialsPath string, tokenPath string) *http.Client {
 	}
 
 	// If modifying these scopes, delete your previously saved token.json.
-	gConfig, err := google.ConfigFromJSON(b, gmail.GmailModifyScope)
+	gConfig, err := google.ConfigFromJSON(b, gmail.MailGoogleComScope)
 	if err != nil {
 		log.Fatalf("[ERROR] Unable to parse client secret file to config: %v", err)
 	}
@@ -182,6 +182,10 @@ func deleteMessages(srv *gmail.Service, user string, queries []string) {
 		mes, err := srv.Users.Messages.List(user).Q(query).Do()
 		if err != nil {
 			log.Fatalf("[Error] %v", err)
+		}
+		if len(mes.Messages) < 1 {
+			log.Println("[INFO] No mail found. Skip.")
+			continue
 		}
 		delIDs := []string{}
 		for _, msgID := range mes.Messages {
