@@ -107,31 +107,18 @@ type HeadlineConfig struct {
 	OutputFile string
 }
 
-func main() {
-	var conf Config
-	_, err := toml.DecodeFile("gmail-headline.toml", &conf)
+func httpClient(credentialsPath string, tokenPath string) *http.Client {
+	b, err := ioutil.ReadFile(credentialsPath)
 	if err != nil {
-		log.Fatalf("Unable to read config file: %v", err)
-	}
-
-	b, err := ioutil.ReadFile(conf.Gmail.CredentialsFile)
-	if err != nil {
-		log.Fatalf("Unable to read client secret file: %v", err)
+		log.Fatalf("[ERROR] Unable to read client secret file: %v", err)
 	}
 
 	// If modifying these scopes, delete your previously saved token.json.
 	gConfig, err := google.ConfigFromJSON(b, gmail.GmailModifyScope)
 	if err != nil {
-		log.Fatalf("Unable to parse client secret file to config: %v", err)
+		log.Fatalf("[ERROR] Unable to parse client secret file to config: %v", err)
 	}
-	client := getClient(gConfig, conf.Gmail.TokenFile)
-
-	// Retrieve messages from Gmail
-	srv, err := gmail.New(client)
-	if err != nil {
-		log.Fatalf("Unable to retrieve Gmail client: %v", err)
-	}
-	execute(srv, &conf.Gmail, &conf.Headline)
+	return getClient(gConfig, tokenPath)
 }
 
 func retrieveMessage(srv *gmail.Service, user string, msgID string) ExcerptMessage {
@@ -144,34 +131,32 @@ func retrieveMessage(srv *gmail.Service, user string, msgID string) ExcerptMessa
 	}
 	msg.Payload.Headers = nil
 
-	// Export a mail data
 	return ExcerptMessage{Metadata: msg, Header: header}
 }
 
-func execute(srv *gmail.Service, gmailConf *GmailConfig, headline *HeadlineConfig) {
-	file, err := os.OpenFile(headline.OutputFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
+func readMessages(srv *gmail.Service, user string, queries []string, outPath string, limit int) {
+	file, err := os.OpenFile(outPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
-		log.Fatalf("Failed to open output file: %v", err)
+		log.Fatalf("[ERROR] Failed to open output file: %v", err)
 	}
 	defer file.Close()
 
 	readIDs := []string{}
-	for _, query := range gmailConf.RetrieveConditions {
+	for _, query := range queries {
 		log.Printf("[INFO] Retrieve q: %v ", query)
-		mes, err := srv.Users.Messages.List(gmailConf.User).Q(query).Do()
+		mes, err := srv.Users.Messages.List(user).Q(query).Do()
 		if err != nil {
-			log.Fatalf("Error: %v", err)
+			log.Fatalf("[ERROR] %v", err)
 		}
 
 		for _, msgID := range mes.Messages {
-			excerpted := retrieveMessage(srv, gmailConf.User, msgID.Id)
-
+			excerpted := retrieveMessage(srv, user, msgID.Id)
 			data, _ := json.Marshal(excerpted)
 			fmt.Fprintln(file, string(data))
 
 			// memo to mark as read
 			readIDs = append(readIDs, msgID.Id)
-			if len(readIDs) >= headline.Limit {
+			if len(readIDs) >= limit {
 				log.Println("[INFO] Exceeded retrieve limit per execution.")
 				break
 			}
@@ -180,15 +165,55 @@ func execute(srv *gmail.Service, gmailConf *GmailConfig, headline *HeadlineConfi
 	}
 
 	// Mark as Read
-	batchReq := gmail.BatchModifyMessagesRequest{
+	modReq := gmail.BatchModifyMessagesRequest{
 		RemoveLabelIds: []string{"UNREAD"},
 		Ids:            readIDs,
 	}
-	err = srv.Users.Messages.BatchModify(gmailConf.User, &batchReq).Do()
+	err = srv.Users.Messages.BatchModify(user, &modReq).Do()
 	if err != nil {
-		log.Fatalf("Error: %v", err)
+		log.Fatalf("[Error] %v", err)
 	}
-    log.Printf("[INFO] Change %d mails to READ.", len(readIDs))
+	log.Printf("[INFO] Change %d mails to READ.", len(readIDs))
+}
 
-	// TODO remove
+func deleteMessages(srv *gmail.Service, user string, queries []string) {
+	for _, query := range queries {
+		log.Printf("[INFO] Delete q: %v ", query)
+		mes, err := srv.Users.Messages.List(user).Q(query).Do()
+		if err != nil {
+			log.Fatalf("[Error] %v", err)
+		}
+		delIDs := []string{}
+		for _, msgID := range mes.Messages {
+			delIDs = append(delIDs, msgID.Id)
+		}
+
+		delReq := gmail.BatchDeleteMessagesRequest{
+			Ids: delIDs,
+		}
+		err = srv.Users.Messages.BatchDelete(user, &delReq).Do()
+		if err != nil {
+			log.Fatalf("[Error] %v", err)
+		}
+		log.Printf("[INFO] Deleted %d mails.", len(delIDs))
+	}
+}
+
+func main() {
+	var conf Config
+	_, err := toml.DecodeFile("gmail-headline.toml", &conf)
+	if err != nil {
+		log.Fatalf("[ERROR] Unable to read config file: %v", err)
+	}
+
+	client := httpClient(conf.Gmail.CredentialsFile, conf.Gmail.TokenFile)
+	srv, err := gmail.New(client)
+	if err != nil {
+		log.Fatalf("[ERROR] Unable to retrieve Gmail client: %v", err)
+	}
+
+	readMessages(srv, conf.Gmail.User, conf.Gmail.RetrieveConditions,
+		conf.Headline.OutputFile, conf.Headline.Limit)
+
+	deleteMessages(srv, conf.Gmail.User, conf.Gmail.DeleteConditions)
 }
