@@ -163,6 +163,10 @@ func readMessages(srv *gmail.Service, user string, queries []string, outPath str
 		}
 		log.Printf("[INFO] Retrieved %d mails.", len(readIDs))
 	}
+	if len(readIDs) < 1 {
+		log.Printf("[INFO] No new mail found.")
+		return
+	}
 
 	// Mark as Read
 	modReq := gmail.BatchModifyMessagesRequest{
