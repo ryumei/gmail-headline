@@ -6,7 +6,7 @@ RetrieveConditions = [
   "is:unread -label:INBOX"
 ]
 DeleteConditions = [
-  "-is:unread older_than:1m label:news"
+  "-is:important -is:starred -in:snoozed -is:unread older_than:1m label:news"
 ]
 
 [Headline]
