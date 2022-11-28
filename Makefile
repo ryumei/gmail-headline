@@ -23,7 +23,7 @@ clean:
 	rm -fr vendor/*
 
 .PHONY: test testv bench
-test: deps golint
+test: deps
 	go test ./...
 
 testv: test
@@ -31,12 +31,6 @@ testv: test
 
 bench: test
 	go test -bench . ./... -benchmem
-
-.PHONY: golint
-golint:
-	@for d in $(SUBPKGS); do \
-	  golint $$d;\
-	done
 
 coverage.out: test
 	echo 'mode: atomic' > $@ && \
@@ -73,7 +67,7 @@ dist: cross-build
 
 .PHONY: deps
 deps:
-	dep ensure -v
+	go mod download
 
 .PHONY: dist-src
 dist-src:
