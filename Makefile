@@ -73,3 +73,8 @@ deps:
 dist-src:
 	git archive --format=zip -o $(NAME)-src.$(VERSION).zip HEAD
 
+.PHONY: mod-upgrade
+mod-upgrade:
+	go get -u
+	go mod tidy
+
